@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz de Otorrinolaringologia</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chosen Palette: Calm Harmony -->
+    <!-- Application Structure Plan: The application follows a logical, multi-screen flow for an optimal user experience. 1) A 'Start Screen' introduces the quiz, collects the user's name, and provides a clear entry point. 2) The 'Quiz Screen' presents one question at a time to focus the user, featuring a progress indicator and a 40-minute timer. 3) The 'Results Screen' gives immediate feedback upon completion, displays the user's name, and offers a print option for permanent record. 4) A 'Review Screen' fulfills the crucial educational goal by allowing users to analyze their incorrect answers with detailed explanations. This structured, sequential approach guides the user from introduction to active learning and reflection, which is the most effective way to present a test-based application. -->
+    <!-- Visualization & Content Choices: 
+        - Report Info: 50 medical MCQs. Goal: Knowledge Assessment & Learning. Viz/Presentation Method: Sequential single-question view. Interaction: Click to select answer, button to advance. Justification: Prevents cognitive overload, mimics a real test environment.
+        - Report Info: Final score. Goal: Performance Summary. Viz/Presentation Method: Donut Chart. Interaction: None (static view). Justification: Provides an immediate, intuitive visual breakdown of correct vs. incorrect answers. Library/Method: Chart.js.
+        - Report Info: Incorrect answers and explanations. Goal: Education/Review. Viz/Presentation Method: List of questions with user's answer, correct answer, and explanation clearly highlighted. Interaction: Scroll to review. Justification: This is the most direct and effective way to facilitate learning from mistakes.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .option-btn {
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+        .selected {
+            background-color: #0891b2 !important;
+            color: white !important;
+            border-color: #0e7490 !important;
+        }
+        .correct {
+            background-color: #dcfce7;
+            border-color: #22c55e;
+            color: #166534;
+        }
+        .incorrect {
+            background-color: #fee2e2;
+            border-color: #ef4444;
+            color: #991b1b;
+        }
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #results-screen, #results-screen * {
+                visibility: visible;
+            }
+            #results-screen {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                box-shadow: none;
+                background-color: white;
+            }
+            .chart-container {
+                page-break-after: avoid;
+            }
+            #review-btn, #retry-btn, #print-btn {
+                display: none;
+            }
+            #user-name-input {
+                /* Esconder o input na impressão */
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body class="bg-amber-50 text-gray-800 flex items-center justify-center min-h-screen p-4">
+
+    <div id="app-container" class="w-full max-w-3xl mx-auto">
+
+        <!-- Start Screen -->
+        <div id="start-screen" class="text-center bg-white p-8 rounded-xl shadow-lg">
+            <h1 class="text-3xl md:text-4xl font-bold text-cyan-800 mb-4">Quiz de Otorrinolaringologia</h1>
+            <p class="text-gray-600 mb-6">Teste seus conhecimentos em 50 questões sobre anatomia, epistaxe e cirurgia nasossinusal. Você terá <span class="font-semibold text-cyan-600">40 minutos</span> para completar o quiz.</p>
+            
+            <!-- Campo para o Nome do Usuário -->
+            <div class="mb-8">
+                <input type="text" id="user-name-input" placeholder="Digite seu nome (Opcional)" class="w-full max-w-sm p-3 border border-gray-300 rounded-lg focus:ring-cyan-500 focus:border-cyan-500 text-center" />
+            </div>
+
+            <button id="start-btn" class="bg-cyan-600 text-white font-bold py-3 px-8 rounded-lg shadow-md hover:bg-cyan-700 transition-transform transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-opacity-50">
+                Iniciar Quiz
+            </button>
+        </div>
+
+        <!-- Quiz Screen -->
+        <div id="quiz-screen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg">
+            <div class="flex justify-between items-center mb-6">
+                <div id="question-counter" class="text-sm font-semibold text-gray-600"></div>
+                <div id="timer" class="text-sm font-bold text-cyan-700 bg-cyan-100 px-3 py-1 rounded-full"></div>
+            </div>
+            <div id="progress-bar-container" class="w-full bg-gray-200 rounded-full h-2.5 mb-6">
+                <div id="progress-bar" class="bg-cyan-600 h-2.5 rounded-full" style="width: 0%"></div>
+            </div>
+            <h2 id="question-text" class="text-xl md:text-2xl font-semibold mb-6"></h2>
+            <div id="options-container" class="space-y-4"></div>
+            <div class="mt-8 text-right">
+                <button id="next-btn" class="bg-cyan-600 text-white font-bold py-2 px-6 rounded-lg shadow-md hover:bg-cyan-700 transition disabled:bg-gray-400 disabled:cursor-not-allowed">Próxima</button>
+            </div>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="results-screen" class="hidden text-center bg-white p-8 rounded-xl shadow-lg">
+            <h1 class="text-3xl md:text-4xl font-bold text-cyan-800 mb-2">Resultado Final</h1>
+            <!-- Mensagem de saudação com o nome do usuário -->
+            <p id="user-greeting" class="text-xl font-medium text-cyan-700 mb-4"></p> 
+            <p id="score-text" class="text-xl text-gray-700 mb-4"></p>
+            <p id="time-text" class="text-gray-600 mb-6"></p>
+            <div class="chart-container relative h-64 w-64 md:h-72 md:w-72 mx-auto mb-8">
+                <canvas id="results-chart"></canvas>
+            </div>
+            <div class="flex flex-col sm:flex-row justify-center gap-4">
+                <button id="review-btn" class="bg-amber-500 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-amber-600 transition">Revisar Erros</button>
+                <button id="retry-btn" class="bg-cyan-600 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-cyan-700 transition">Tentar Novamente</button>
+                <!-- Botão de Imprimir Resultado -->
+                <button id="print-btn" class="bg-gray-600 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-gray-700 transition">Imprimir Resultado</button>
+            </div>
+        </div>
+        
+        <!-- Review Screen -->
+        <div id="review-screen" class="hidden bg-white p-6 md:p-8 rounded-xl shadow-lg">
+            <h1 class="text-3xl font-bold text-cyan-800 mb-6 text-center">Revisão dos Erros</h1>
+            <div id="review-container" class="space-y-8"></div>
+            <div class="mt-8 text-center">
+                 <button id="back-to-results-btn" class="bg-cyan-600 text-white font-bold py-3 px-6 rounded-lg shadow-md hover:bg-cyan-700 transition">Voltar ao Resultado</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const quizData = [
+            {
+                question: "Em relação à irrigação da cavidade nasal, qual das alternativas descreve corretamente a contribuição arterial da região de Kiesselbach (área de Little)?",
+                options: [
+                    "Ramos da artéria etmoidal posterior, esfenopalatina e palatina maior.",
+                    "Ramos da artéria esfenopalatina, etmoidal anterior, labial superior e palatina maior.",
+                    "Ramos da artéria carótida externa e interna sem anastomose entre si.",
+                    "Ramos apenas da artéria esfenopalatina.",
+                    "Ramos da artéria labial inferior e faríngea ascendente."
+                ],
+                correct: 1,
+                explanation: "A área de Kiesselbach (ou plexo de Little) é o principal sítio de epistaxe anterior e recebe anastomoses de ramos da artéria esfenopalatina (maxilar), etmoidal anterior (oftálmica), labial superior (facial) e palatina maior."
+            },
+            {
+                question: "Sobre a drenagem venosa da cavidade nasal, assinale a alternativa correta.",
+                options: [
+                    "É exclusiva para o sistema da veia jugular externa.",
+                    "Comunica-se com os plexos pterigoide e cavernoso, o que favorece disseminação de infecções.",
+                    "É limitada ao sistema da veia facial, sem comunicação intracraniana.",
+                    "Drena exclusivamente para o plexo faríngeo.",
+                    "Não apresenta relevância clínica nas epistaxes posteriores."
+                ],
+                correct: 1,
+                explanation: "A drenagem venosa nasal é feita para as veias facial, pterigoide e etmoidal, comunicando-se com o seio cavernoso — fato que explica o risco de trombose séptica e complica epistaxes posteriores."
+            },
+            {
+                question: "Qual estrutura representa o limite posterior do septo nasal e tem relevância cirúrgica nas epistaxes de origem esfenopalatina?",
+                options: ["Crista nasal do palatino.", "Vômer.", "Lâmina perpendicular do etmoide.", "Coana.", "Recesso esfenoetmoidal."],
+                correct: 3,
+                explanation: "A coana é o limite posterior da cavidade nasal, onde se localiza o forame esfenopalatino, principal origem das epistaxes posteriores de maior gravidade."
+            },
+            {
+                question: "Em relação à anatomia cirúrgica do forame esfenopalatino, assinale a alternativa correta.",
+                options: [
+                    "Localiza-se inferiormente ao corneto médio e é atravessado pela artéria etmoidal anterior.",
+                    "Localiza-se superiormente ao recesso esfenoetmoidal e conduz ramos da artéria oftálmica.",
+                    "Situa-se na parede lateral nasal, posteriormente à concha média, por onde emergem os ramos da artéria esfenopalatina.",
+                    "É limitado inferiormente pela apófise ascendente do maxilar.",
+                    "Comunica-se com o seio frontal."
+                ],
+                correct: 2,
+                explanation: "O forame esfenopalatino localiza-se na parede lateral nasal, logo posterior à concha média, e é a via de saída da artéria esfenopalatina (ramo terminal da artéria maxilar), estrutura-chave na ligadura endoscópica."
+            },
+            {
+                question: "Em relação à abordagem terapêutica da epistaxe, qual das seguintes condutas é mais adequada diante de uma hemorragia posterior refratária às medidas convencionais?",
+                options: [
+                    "Cauterização química anterior com nitrato de prata.",
+                    "Tamponamento anterior simples com gaze vaselinada.",
+                    "Ligadura endoscópica da artéria esfenopalatina.",
+                    "Ligadura da artéria etmoidal anterior por via externa.",
+                    "Compressão digital bilateral do nariz por 10 minutos."
+                ],
+                correct: 2,
+                explanation: "A epistaxe posterior, geralmente de origem esfenopalatina, exige tratamento cirúrgico quando refratária ao tamponamento, sendo a ligadura endoscópica da artéria esfenopalatina o procedimento de escolha."
+            },
+            {
+                question: "Qual das alternativas melhor descreve a origem e o trajeto da artéria esfenopalatina, principal vaso envolvido nas epistaxes posteriores?",
+                options: [
+                    "Origina-se da artéria carótida interna e penetra a cavidade nasal através do forame etmoidal posterior.",
+                    "É ramo terminal da artéria maxilar, penetrando a cavidade nasal pelo forame esfenopalatino.",
+                    "Origina-se da artéria facial e perfura o septo nasal anterior.",
+                    "Deriva da artéria temporal superficial e irriga a concha superior.",
+                    "É ramo colateral da artéria faríngea ascendente."
+                ],
+                correct: 1,
+                explanation: "A artéria esfenopalatina é o ramo terminal da artéria maxilar (carótida externa) e penetra na cavidade nasal pelo forame esfenopalatino, irrigando as porções posteriores da parede lateral e do septo nasal."
+            },
+            {
+                question: "Em relação à etiologia da epistaxe, assinale a alternativa que não corresponde a causa frequente de sangramento nasal.",
+                options: [
+                    "Trauma digital (manipulação nasal).",
+                    "Uso crônico de anticoagulantes e antiagregantes.",
+                    "Hipertensão arterial sistêmica mal controlada.",
+                    "Doença de Rendu-Osler-Weber.",
+                    "Paralisia de Bell."
+                ],
+                correct: 4,
+                explanation: "A paralisia de Bell (paralisia facial periférica) não está associada a epistaxe; as demais opções representam causas locais ou sistêmicas reconhecidas."
+            },
+            {
+                question: "Qual dos seguintes achados diferencia a epistaxe posterior da anterior quanto à apresentação clínica?",
+                options: [
+                    "Sangramento visível na narina anterior ipsilateral.",
+                    "Sangramento unidirecional e autolimitado.",
+                    "Presença de sangue na orofaringe e dificuldade de localização do foco.",
+                    "Epistaxe discreta e autolimitada com crostas na área de Kiesselbach.",
+                    "Resposta imediata ao tamponamento anterior."
+                ],
+                correct: 2,
+                explanation: "A epistaxe posterior tende a drenar para a orofaringe, com sangramento volumoso e difícil de localizar, frequentemente necessitando tamponamento posterior ou ligadura endoscópica."
+            },
+            {
+                question: "Sobre a conduta inicial na abordagem da epistaxe em ambiente hospitalar, assinale a alternativa correta.",
+                options: [
+                    "Posicionar o paciente em decúbito dorsal e aplicar compressão bilateral.",
+                    "Realizar imediatamente cauterização elétrica sem inspeção.",
+                    "Colocar o paciente sentado, com leve flexão anterior da cabeça e compressão nasal anterior.",
+                    "Administrar vasodilatadores tópicos.",
+                    "Inserir tampão posterior antes da inspeção."
+                ],
+                correct: 2,
+                explanation: "A posição sentada com leve inclinação anterior evita aspiração de sangue, e a compressão nasal anterior, associada a vasoconstritor tópico, é o primeiro passo no controle de epistaxe."
+            },
+            {
+                question: "Durante a ligadura endoscópica da artéria esfenopalatina, qual das seguintes estruturas anatômicas serve como principal referência para localizar o forame esfenopalatino?",
+                options: [
+                    "Bordo superior do corneto inferior.",
+                    "Inserção posterior do corneto médio.",
+                    "Recesso esfenoetmoidal.",
+                    "Meato inferior.",
+                    "Concha superior."
+                ],
+                correct: 1,
+                explanation: "A inserção posterior do corneto médio é o principal marco anatômico para identificar o forame esfenopalatino e realizar a ligadura segura da artéria durante o procedimento endoscópico."
+            },
+            {
+                question: "Qual das seguintes situações clínicas exige investigação de epistaxe secundária de origem sistêmica?",
+                options: [
+                    "Epistaxe isolada em adolescente com trauma digital.",
+                    "Sangramento discreto unilateral autolimitado.",
+                    "Recorrência bilateral sem causa aparente e presença de petéquias.",
+                    "Epistaxe relacionada à rinite alérgica.",
+                    "Epistaxe após cauterização química recente."
+                ],
+                correct: 2,
+                explanation: "A epistaxe bilateral recorrente, acompanhada de sinais hemorrágicos sistêmicos (petéquias, equimoses), sugere coagulopatia ou plaquetopenia e requer investigação laboratorial."
+            },
+            {
+                question: "Sobre a fisiopatologia da epistaxe em pacientes hipertensos, assinale a alternativa correta.",
+                options: [
+                    "A hipertensão é causa direta de ruptura vascular em todos os casos.",
+                    "O aumento da pressão sistêmica dificulta a formação do tampão hemostático e prolonga o sangramento.",
+                    "A hipertensão não interfere na gravidade nem na recorrência.",
+                    "A epistaxe é sempre anterior nesses pacientes.",
+                    "A pressão arterial deve ser elevada para manter perfusão nasal."
+                ],
+                correct: 1,
+                explanation: "A hipertensão arterial não é a causa primária da epistaxe, mas dificulta a hemostasia por manter fluxo pressórico aumentado e retardar a formação do tampão hemostático."
+            },
+            {
+                question: "Durante o exame endoscópico, o cirurgião identifica sangramento difuso sem ponto evidente após manipulação nasal. Qual é a conduta mais adequada?",
+                options: [
+                    "Aumentar a pressão arterial para localizar o ponto de sangramento.",
+                    "Irrigar com soro fisiológico e realizar cauterização ampla sem visualização.",
+                    "Utilizar vasoconstritor tópico e realizar hemostasia seletiva sob visão endoscópica.",
+                    "Inserir tampão posterior imediatamente sem avaliação.",
+                    "Prosseguir para ligadura arterial externa sem inspeção endonasal."
+                ],
+                correct: 2,
+                explanation: "O uso de vasoconstritor tópico melhora a visualização, permitindo cauterização seletiva sob endoscopia — conduta segura e conservadora antes de medidas cirúrgicas mais invasivas."
+            },
+            {
+                question: "Em pacientes com epistaxe posterior grave, qual das alternativas abaixo não é considerada medida adequada de suporte inicial?",
+                options: [
+                    "Acesso venoso calibroso e reposição volêmica se necessário.",
+                    "Avaliação hemodinâmica e monitorização cardíaca.",
+                    "Posicionamento supino com cabeça estendida.",
+                    "Aplicação de vasoconstritor tópico e oxigenação adequada.",
+                    "Avaliação de coagulograma e hemoglobina."
+                ],
+                correct: 2,
+                explanation: "O posicionamento supino com cabeça estendida aumenta o risco de aspiração e perda de controle do sangramento; o paciente deve permanecer sentado e levemente inclinado para frente."
+            },
+            {
+                question: "Qual complicação pode ocorrer após o tamponamento posterior prolongado com sonda de Foley em epistaxe grave?",
+                options: [
+                    "Sinusite e otite média.",
+                    "Isquemia da mucosa e necrose do palato mole.",
+                    "Perfuração septal anterior.",
+                    "Epífora por lesão do ducto lacrimal.",
+                    "Desvio septal iatrogênico."
+                ],
+                correct: 1,
+                explanation: "O tamponamento posterior prolongado pode causar compressão da mucosa da nasofaringe e do palato mole, levando a necrose isquêmica; por isso, recomenda-se limitar o tempo e associar antibioticoprofilaxia."
+            },
+            {
+                question: "Em relação à artéria etmoidal anterior, assinale a alternativa correta.",
+                options: [
+                    "Origina-se da artéria maxilar e irriga a parede lateral nasal.",
+                    "É ramo da artéria oftálmica, penetra pelo forame etmoidal anterior e irriga o terço superior do septo.",
+                    "É ramo terminal da artéria facial e irriga o corneto inferior.",
+                    "Cruza o teto etmoidal sem relação com o nervo óptico.",
+                    "Origina-se da artéria esfenopalatina e irriga o palato duro."
+                ],
+                correct: 1,
+                explanation: "A artéria etmoidal anterior é ramo da artéria oftálmica (carótida interna), penetra pelo forame etmoidal anterior e irriga o terço superior do septo e a parede lateral superior da cavidade nasal."
+            },
+            {
+                question: "Qual das opções abaixo representa corretamente a sequência de abordagem terapêutica progressiva nas epistaxes refratárias?",
+                options: [
+                    "Compressão digital → tamponamento anterior → ligadura esfenopalatina → ligadura carótida externa.",
+                    "Compressão digital → ligadura carótida externa → tamponamento anterior → cauterização.",
+                    "Cauterização direta → tamponamento posterior → observação domiciliar.",
+                    "Cauterização química → uso de anticoagulantes → ligadura da carótida interna.",
+                    "Tamponamento posterior → cauterização sem visualização endoscópica."
+                ],
+                correct: 0,
+                explanation: "A sequência terapêutica lógica é: medidas simples (compressão e vasoconstritor) → tamponamento anterior → controle endoscópico e ligadura esfenopalatina →, em casos excepcionais, ligadura da carótida externa."
+            },
+            {
+                question: "Durante uma epistaxe posterior, o cirurgião identifica sangramento proveniente da parede lateral alta, imediatamente posterior ao corneto médio. Qual a artéria mais provavelmente envolvida?",
+                options: [
+                    "Artéria labial superior.",
+                    "Artéria etmoidal posterior.",
+                    "Artéria esfenopalatina.",
+                    "Artéria palatina ascendente.",
+                    "Artéria faríngea ascendente."
+                ],
+                correct: 2,
+                explanation: "A artéria esfenopalatina irriga a parede lateral posterior e o septo nasal posterior; é a principal responsável pelas epistaxes volumosas e refratárias, situando-se logo posterior à concha média."
+            },
+            {
+                question: "Sobre complicações possíveis após cauterização elétrica ou química em epistaxe anterior, assinale a alternativa correta.",
+                options: [
+                    "Perfuração septal anterior devido à necrose bilateral.",
+                    "Paralisia facial periférica transitória.",
+                    "Formação de pólipos nasais.",
+                    "Lesão do nervo olfatório e anosmia definitiva.",
+                    "Epífora por dano ao saco lacrimal."
+                ],
+                correct: 0,
+                explanation: "A cauterização bilateral da área de Kiesselbach pode levar à necrose da cartilagem septal e perfuração anterior; deve-se cauterizar apenas um lado por vez."
+            },
+            {
+                question: "Em relação às indicações de abordagem cirúrgica nas epistaxes, qual é a alternativa correta?",
+                options: [
+                    "Devem ser indicadas apenas após duas recorrências anuais.",
+                    "São restritas aos casos de trauma nasal grave.",
+                    "Estão indicadas nas epistaxes posteriores refratárias ao tamponamento e nas recidivantes graves.",
+                    "Contraindicadas em pacientes hipertensos ou anticoagulados.",
+                    "Devem sempre preceder o tamponamento anterior."
+                ],
+                correct: 2,
+                explanation: "A ligadura endoscópica da artéria esfenopalatina é indicada nas epistaxes posteriores refratárias ao tamponamento e nos casos de recidiva grave; representa tratamento definitivo e seguro."
+            },
+            {
+                question: "Durante o exercício físico, qual é a principal consequência fisiológica imediata da obstrução nasal significativa?",
+                options: [
+                    "Aumento da ventilação alveolar por compensação oral.",
+                    "Redução da resistência das vias aéreas superiores.",
+                    "Diminuição da oxigenação tecidual e aumento do esforço ventilatório.",
+                    "Melhora da capacidade inspiratória total.",
+                    "Estímulo reflexo para bradicardia."
+                ],
+                correct: 2,
+                explanation: "A obstrução nasal reduz a ventilação eficiente, aumenta o trabalho respiratório e compromete a oxigenação tecidual durante o exercício, levando à fadiga precoce."
+            },
+            {
+                question: "Qual dos seguintes mecanismos explica a sensação subjetiva de dispneia em pacientes com obstrução nasal durante a atividade física?",
+                options: [
+                    "Ativação de mecanorreceptores orofaríngeos e aumento da pressão negativa inspiratória.",
+                    "Hiperventilação alveolar e alcalose respiratória.",
+                    "Redução da resistência de via aérea por recrutamento alveolar.",
+                    "Inibição do reflexo vagal nasal.",
+                    "Aumento do volume corrente expiratório."
+                ],
+                correct: 0,
+                explanation: "A obstrução nasal eleva a pressão inspiratória negativa e ativa mecanorreceptores faríngeos, produzindo sensação de esforço respiratório e dispneia."
+            },
+            {
+                question: "Sobre a importância da respiração nasal durante o exercício, assinale a alternativa correta.",
+                options: [
+                    "É responsável pela filtração, aquecimento e umidificação do air inspirado.",
+                    "Tem função irrelevante na oxigenação em indivíduos saudáveis.",
+                    "Diminui a resistência total das vias aéreas.",
+                    "Prejudica o controle térmico corporal.",
+                    "Deve ser evitada em esportes de alta intensidade."
+                ],
+                correct: 0,
+                explanation: "A respiração nasal é fisiologicamente superior, pois filtra, aquece e umidifica o ar inspirado, mantendo adequada homeostase respiratória e proteção brônquica."
+            },
+            {
+                question: "Em indivíduos com obstrução nasal crônica, qual adaptação ocorre comumente durante o exercício físico prolongado?",
+                options: [
+                    "Redução do volume corrente e aumento do volume residual.",
+                    "Migração do padrão ventilatório para a respiração oral com sobrecarga de musculatura acessória.",
+                    "Aumento da resistência nasal para compensação alveolar.",
+                    "Redução do volume minuto ventilatório.",
+                    "Diminuição do estímulo simpático respiratório."
+                ],
+                correct: 1,
+                explanation: "Com obstrução nasal persistente, o padrão respiratório migra para a via oral, resultando em menor eficiência ventilatória e maior uso de músculos acessórios."
+            },
+            {
+                question: "Em atletas, a obstrução nasal pode afetar o desempenho por qual mecanismo principal?",
+                options: [
+                    "Aumento do volume sistólico cardíaco.",
+                    "Hipercapnia por hipoventilação alveolar.",
+                    "Desvio do fluxo aéreo para vias de maior turbulência e menor aproveitamento ventilatório.",
+                    "Redução do débito cardíaco por vasodilatação nasal.",
+                    "Aumento da pressão parcial de oxigênio alveolar."
+                ],
+                correct: 2,
+                explanation: "A obstrução nasal desvia o fluxo para vias de maior resistência e turbulência, reduzindo a eficiência ventilatória e o desempenho físico."
+            },
+            {
+                question: "A síndrome da respiração oral secundária à obstrução nasal está associada a qual das seguintes alterações durante o exercício?",
+                options: [
+                    "Diminuição do pH arterial e aumento da PCO₂.",
+                    "Melhora da ventilação minuto e eficiência respiratória.",
+                    "Redução da resistência ao fluxo aéreo nas vias superiores.",
+                    "Aumento do tempo de apneia inspiratória voluntária.",
+                    "Maior recrutamento de músculos da parede abdominal."
+                ],
+                correct: 0,
+                explanation: "A respiração oral leva à ventilação menos eficiente, hipoventilação alveolar e retenção de CO₂, com tendência à acidose respiratória durante o esforço."
+            },
+            {
+                question: "Qual parâmetro cardiorrespiratório é mais comumente afetado pela obstrução nasal durante o exercício de intensidade moderada?",
+                options: [
+                    "Frequência cardíaca máxima.",
+                    "Saturação periférica de oxigênio (SpO₂).",
+                    "Ventilação minuto e volume corrente.",
+                    "Pressão arterial média.",
+                    "Débito cardíaco."
+                ],
+                correct: 2,
+                explanation: "A obstrução nasal reduz a ventilação minuto e o volume corrente devido à resistência inspiratória aumentada, prejudicando a troca gasosa durante o esforço."
+            },
+            {
+                question: "Sobre o impacto da rinite alérgica não controlada em indivíduos fisicamente ativos, assinale a correta.",
+                options: [
+                    "Não interfere na performance desde que não haja obstrução nasal estrutural.",
+                    "Provoca aumento do esforço respiratório e queda do desempenho aeróbico.",
+                    "Está associada a broncodilatação reflexa durante o exercício.",
+                    "Reduz a percepção de dispneia pela dessensibilização receptorial.",
+                    "Melhora o volume expiratório forçado (VEF1) por estímulo adrenérgico."
+                ],
+                correct: 1,
+                explanation: "A rinite alérgica, ao aumentar a resistência nasal e reduzir o fluxo aéreo, compromete o desempenho aeróbico e a tolerância ao exercício."
+            },
+            {
+                question: "Em crianças com respiração oral crônica, qual consequência funcional é frequentemente observada durante atividades físicas?",
+                options: [
+                    "Hipertrofia compensatória de cornetos inferiores.",
+                    "Hipodesenvolvimento torácico e redução da capacidade vital.",
+                    "Melhora da coordenação respiratória e ventilatória.",
+                    "Aumento da pressão parcial de oxigênio alveolar.",
+                    "Expansão pulmonar exagerada."
+                ],
+                correct: 1,
+                explanation: "A respiração oral crônica compromete o desenvolvimento torácico, levando a padrão respiratório ineficiente e menor capacidade vital pulmonar."
+            },
+            {
+                question: "A respiração nasal eficiente durante o exercício contribui para a homeostase ácido-base por qual mecanismo?",
+                options: [
+                    "Reduz a ventilação alveolar, gerando acidose compensatória.",
+                    "Favorece o controle da eliminação de CO₂ e evita alcalose respiratória.",
+                    "Estimula hiperventilação compensatória prolongada.",
+                    "Diminui a perfusão capilar alveolar.",
+                    "Aumenta a absorção de oxigênio por difusão ativa."
+                ],
+                correct: 1,
+                explanation: "A ventilação nasal adequada mantém o equilíbrio ácido-base ao permitir eliminação controlada de CO₂ e evitar alcalose por hiperventilação."
+            },
+            {
+                question: "Em relação à influência da obstrução nasal sobre o sono e a recuperação física de atletas, assinale a correta.",
+                options: [
+                    "O sono é preservado, pois a respiração oral é suficiente.",
+                    "A obstrução nasal leva à fragmentação do sono e piora da recuperação muscular.",
+                    "A respiração oral aumenta o tônus parassimpático noturno e melhora a recuperação.",
+                    "A obstrução nasal não afeta o ciclo REM.",
+                    "Reduz o risco de apneia obstrutiva."
+                ],
+                correct: 1,
+                explanation: "A obstrução nasal piora a qualidade do sono, aumenta microdespertares e reduz a recuperação muscular e metabólica, especialmente em atletas."
+            },
+            {
+                question: "Qual das condições a seguir está mais fortemente associada à obstrução nasal crônica e declínio da performance física?",
+                options: [
+                    "Desvio septal leve.",
+                    "Polipose nasossinusal.",
+                    "Hipertrofia adenoideana residual em adultos.",
+                    "Vasculite nasal localizada.",
+                    "Perfuração septal."
+                ],
+                correct: 1,
+                explanation: "A polipose nasossinusal causa obstrução importante e crônica das vias aéreas, levando a limitação ventilatória e fadiga precoce durante exercícios."
+            },
+            {
+                question: "Em estudos de função pulmonar, o padrão observado em pacientes com obstrução nasal isolada é caracterizado por:",
+                options: [
+                    "Redução do VEF1/FVC com curva obstrutiva típica.",
+                    "Curva de fluxo-volume normal com aumento da resistência inspiratória extratorácica.",
+                    "Restrição pulmonar com queda da capacidade vital.",
+                    "Aumento do volume residual e da complacência.",
+                    "Redução do pico de fluxo expiratório por limitação alveolar."
+                ],
+                correct: 1,
+                explanation: "A obstrução nasal é extratorácica e inspira predominantemente aumento da resistência inspiratória, sem alterar volumes pulmonares globais."
+            },
+            {
+                question: "Em programas de reabilitação respiratória, qual estratégia terapêutica pode melhorar o desempenho ventilatório de pacientes com obstrução nasal leve a moderada?",
+                options: [
+                    "Treino de musculatura expiratória apenas.",
+                    "Exercícios de reeducação diafragmática e controle nasal de fluxo.",
+                    "Ventilação mecânica não invasiva noturna.",
+                    "Bloqueio anestésico nasal.",
+                    "Supressão de atividade física intensa."
+                ],
+                correct: 1,
+                explanation: "A reeducação diafragmática e o controle do fluxo nasal promovem melhor coordenação ventilatória e redução da resistência inspiratória."
+            },
+            {
+                question: "Em pacientes com obstrução nasal estrutural submetidos à septoplastia, qual benefício é mais consistentemente relatado na prática esportiva?",
+                options: [
+                    "Redução da capacidade vital forçada.",
+                    "Aumento do tempo de recuperação pós-esforço.",
+                    "Melhora do volume minuto e da tolerância ao exercício.",
+                    "Redução da SpO₂ por redistribuição do fluxo.",
+                    "Aumento da congestão nasal reflexa."
+                ],
+                correct: 2,
+                explanation: "A correção cirúrgica de causas estruturais melhora o fluxo aéreo nasal, aumenta o volume minuto ventilatório e a tolerância ao exercício físico."
+            },
+            {
+                question: "A lâmina papirácea é uma estrutura anatômica de grande relevância na cirurgia endoscópica nasossinusal. Qual das alternativas descreve corretamente sua localização e importância cirúrgica?",
+                options: [
+                    "Parede lateral da órbita, espessa e resistente a fraturas.",
+                    "Parede medial da órbita, delgada, que separa o seio etmoidal da cavidade orbitária.",
+                    "Parede inferior da órbita, relacionada ao seio frontal.",
+                    "Estrutura que delimita o teto etmoidal e o canal óptico.",
+                    "Parede posterior do seio maxilar."
+                ],
+                correct: 1,
+                explanation: "A lâmina papirácea é a parede medial da órbita, extremamente fina, separando a cavidade orbitária dos seios etmoidais — principal via de complicações orbitárias durante a CENS."
+            },
+            {
+                question: "A lesão de qual vaso é a principal responsável por hematoma orbitário agudo durante a cirurgia endoscópica nasossinusal?",
+                options: [
+                    "Artéria facial.",
+                    "Artéria etmoidal anterior.",
+                    "Artéria carótida interna.",
+                    "Artéria oftálmica.",
+                    "Artéria esfenopalatina."
+                ],
+                correct: 1,
+                explanation: "A artéria etmoidal anterior, ramo da artéria oftálmica, pode estar deiscente e, quando lesada, provoca hematoma orbitário com risco de amaurose."
+            },
+            {
+                question: "Qual é o músculo extraocular mais suscetível a lesão durante a cirurgia endoscópica do seio etmoidal?",
+                options: [
+                    "Reto inferior.",
+                    "Oblíquo superior.",
+                    "Reto medial.",
+                    "Reto lateral.",
+                    "Oblíquo inferior."
+                ],
+                correct: 2,
+                explanation: "O músculo reto medial situa-se imediatamente atrás da lâmina papirácea, sendo o mais vulnerável a lesões diretas durante a etmoidectomia."
+            },
+            {
+                question: "Entre as medidas preventivas abaixo, qual é considerada fundamental para evitar complicações orbitárias graves durante a CENS?",
+                options: [
+                    "Realizar tamponamento nasal precoce.",
+                    "Evitar revisão de TC pré-operatória.",
+                    "Avaliar previamente a localização das artérias etmoidais e variações anatômicas.",
+                    "Realizar a cirurgia sem visualização endoscópica.",
+                    "Aumentar a pressão arterial intraoperatória para reduzir o sangramento."
+                ],
+                correct: 2,
+                explanation: "A revisão tomográfica pré-operatória com identificação das artérias etmoidais e variações anatômicas é medida essencial de segurança cirúrgica."
+            },
+            {
+                question: "Qual é a principal manifestação clínica da lesão do sistema de drenagem lacrimal durante a CENS?",
+                options: [
+                    "Diplopia.",
+                    "Epífora.",
+                    "Enoftalmia.",
+                    "Amaurose.",
+                    "Hematoma subconjuntival."
+                ],
+                correct: 1,
+                explanation: "A epífora (lacrimejamento constante) é o sintoma típico da lesão do ducto nasolacrimal ou saco lacrimal durante a cirurgia."
+            },
+            {
+                question: "Qual é o tempo máximo estimado para intervenção cirúrgica diante de hematoma retro-orbitário com perda visual iminente?",
+                options: [
+                    "10 minutos.",
+                    "30 minutos.",
+                    "1 hora.",
+                    "3 horas.",
+                    "6 horas."
+                ],
+                correct: 1,
+                explanation: "A descompressão orbitária deve ocorrer preferencialmente em até 30 minutos após o aparecimento dos sinais de compressão para evitar neuropatia óptica isquêmica irreversível."
+            },
+            {
+                question: "O mnemônico CLOSE, utilizado na análise tomográfica pré-operatória, inclui os seguintes elementos, EXCETO:",
+                options: [
+                    "Placa cribriforme.",
+                    "Lâmina papirácea.",
+                    "Célula de Onodi.",
+                    "Seio frontal.",
+                    "Artéria etmoidal anterior."
+                ],
+                correct: 3,
+                explanation: "O mnemônico CLOSE abrange as principais estruturas de risco orbitário e intracraniano: Cribriform plate, Lamina papyracea, Onodi cell, Sphenoid sinus pneumatization, Ethmoidal artery."
+            },
+            {
+                question: "Qual é o tipo de complicação associada à lesão do nervo óptico durante a cirurgia endoscópica do seio esfenoidal?",
+                options: [
+                    "Perda visual reversível por isquemia retiniana.",
+                    "Diplopia transitória.",
+                    "Perda visual irreversível por trauma direto.",
+                    "Enoftalmia unilateral.",
+                    "Dacriocistite recorrente."
+                ],
+                correct: 2,
+                explanation: "A lesão direta do nervo óptico no seio esfenoidal, especialmente quando não há lamela óssea de proteção, leva à amaurose irreversível."
+            },
+            {
+                question: "Em caso de sangramento orbitário arterial com proptose súbita, qual é a sequência terapêutica inicial adequada?",
+                options: [
+                    "Observação e compressas frias.",
+                    "Elevação da cabeça, retirada de tamponamento nasal e manitol endovenoso.",
+                    "Tamponamento nasal adicional e elevação da pressão arterial.",
+                    "Oclusão ocular e antibioticoterapia.",
+                    "Cauterização externa imediata."
+                ],
+                correct: 1,
+                explanation: "A conduta inicial inclui descompressão clínica (cabeceira elevada), remoção de tampões, uso de manitol/acetazolamida e avaliação imediata da necessidade de cantotomia lateral."
+            },
+            {
+                question: "Quais sinais intraoperatórios devem alertar para possível hematoma orbitário agudo?",
+                options: [
+                    "Sangramento discreto e autolimitado.",
+                    "Hiperemia conjuntival, aumento da tensão orbital e proptose.",
+                    "Enoftalmia e hiporreflexia pupilar.",
+                    "Epistaxe anterior leve.",
+                    "Blefaroespasmo isolado."
+                ],
+                correct: 1,
+                explanation: "Hiperemia conjuntival, proptose e tensão orbital aumentada são sinais precoces de hematoma orbitário e indicam interrupção imediata da cirurgia."
+            },
+            {
+                question: "Qual é a complicação classificada como grau II na escala de gravidade orbitária mencionada no texto?",
+                options: [
+                    "Lesão da lâmina papirácea.",
+                    "Hematoma retro-orbitário.",
+                    "Lesão do ducto nasolacrimal.",
+                    "Lesão do nervo óptico.",
+                    "Equimose periorbitária."
+                ],
+                correct: 2,
+                explanation: "As complicações grau II são intermediárias, como lesão do sistema lacrimal, que geralmente causam epífora e exigem dacriocistorrinostomia."
+            },
+            {
+                question: "Em relação ao manejo da hemorragia orbitária venosa, qual característica distingue-a da hemorragia arterial?",
+                options: [
+                    "Início abrupto e doloroso.",
+                    "Evolução subaguda, com edema progressivo e dor tardia.",
+                    "Presença de sopro orbitário.",
+                    "Necessidade de descompressão imediata.",
+                    "Cursa com amaurose instantânea."
+                ],
+                correct: 1,
+                explanation: "A hemorragia venosa orbitária tem instalação lenta, com edema e dor progressivos, contrastando com a hemorragia arterial aguda e súbita."
+            },
+            {
+                question: "Em caso de lesão do músculo reto medial durante a cirurgia, qual achado clínico é esperado no pós-operatório?",
+                options: [
+                    "Diplopia com limitação de adução.",
+                    "Nistagmo vertical.",
+                    "Ptose palpebral bilateral.",
+                    "Enoftalmia com hipotropia.",
+                    "Miose pupilar reflexa."
+                ],
+                correct: 0,
+                explanation: "A lesão do reto medial leva à diplopia por perda da adução ocular e desvio lateral do globo."
+            },
+            {
+                question: "Após descompressão orbitária endoscópica, o aparecimento de epífora e dacriocistite indica qual complicação?",
+                options: [
+                    "Fibrose orbitária.",
+                    "Lesão das vias lacrimais.",
+                    "Lesão do nervo infraorbital.",
+                    "Isquemia da conjuntiva.",
+                    "Fístula liquórica."
+                ],
+                correct: 1,
+                explanation: "A obstrução das vias lacrimais após descompressão orbitária é causa frequente de epífora e infecção secundária (dacriocistite)."
+            },
+            {
+                question: "Em pacientes com variações anatômicas importantes, como célula de Onodi, qual precaução intraoperatória é essencial?",
+                options: [
+                    "Evitar uso de óptica endoscópica.",
+                    "Ressecar completamente a parede lateral do seio esfenoidal.",
+                    "Identificar a posição do nervo óptico e da artéria carótida antes da dissecção.",
+                    "Tamponar o seio esfenoidal previamente.",
+                    "Utilizar instrumentos cegos para dissecção rápida."
+                ],
+                correct: 2,
+                explanation: "A célula de Onodi pode envolver o nervo óptico e a artéria carótida, tornando essencial sua identificação prévia para evitar lesões graves."
+            }
+        ];
+
+        const startScreen = document.getElementById('start-screen');
+        const quizScreen = document.getElementById('quiz-screen');
+        const resultsScreen = document.getElementById('results-screen');
+        const reviewScreen = document.getElementById('review-screen');
+
+        const startBtn = document.getElementById('start-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const retryBtn = document.getElementById('retry-btn');
+        const reviewBtn = document.getElementById('review-btn');
+        const printBtn = document.getElementById('print-btn'); // Novo botão
+        const backToResultsBtn = document.getElementById('back-to-results-btn');
+
+        const questionCounter = document.getElementById('question-counter');
+        const timerEl = document.getElementById('timer');
+        const progressBar = document.getElementById('progress-bar');
+        const questionText = document.getElementById('question-text');
+        const optionsContainer = document.getElementById('options-container');
+        const scoreText = document.getElementById('score-text');
+        const timeText = document.getElementById('time-text');
+        const reviewContainer = document.getElementById('review-container');
+        const userGreetingEl = document.getElementById('user-greeting'); // Novo elemento
+
+        let currentQuestionIndex = 0;
+        let score = 0;
+        let userAnswers = [];
+        let timer;
+        const totalTime = 40 * 60; // Alterado para 40 minutos
+        let timeRemaining = totalTime;
+        let userName = ''; // Variável para armazenar o nome
+
+        function startQuiz() {
+            currentQuestionIndex = 0;
+            score = 0;
+            userAnswers = [];
+            timeRemaining = totalTime;
+            
+            // Obtém e armazena o nome do usuário
+            const nameInput = document.getElementById('user-name-input').value.trim();
+            userName = nameInput || 'Convidado(a)';
+
+            startScreen.classList.add('hidden');
+            resultsScreen.classList.add('hidden');
+            reviewScreen.classList.add('hidden');
+            quizScreen.classList.remove('hidden');
+            
+            loadQuestion();
+            startTimer();
+        }
+
+        function startTimer() {
+            // Limpa o timer anterior se existir
+            if (timer) clearInterval(timer); 
+
+            timer = setInterval(() => {
+                timeRemaining--;
+                const minutes = Math.floor(timeRemaining / 60);
+                const seconds = timeRemaining % 60;
+                timerEl.textContent = `Tempo: ${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                
+                if (timeRemaining <= 0) {
+                    clearInterval(timer);
+                    endQuiz();
+                }
+            }, 1000);
+        }
+
+        function loadQuestion() {
+            if (currentQuestionIndex >= quizData.length) {
+                endQuiz();
+                return;
+            }
+
+            const currentQuestion = quizData[currentQuestionIndex];
+            questionCounter.textContent = `Questão ${currentQuestionIndex + 1} de ${quizData.length}`;
+            progressBar.style.width = `${((currentQuestionIndex + 1) / quizData.length) * 100}%`;
+            questionText.textContent = currentQuestion.question;
+            
+            optionsContainer.innerHTML = '';
+            currentQuestion.options.forEach((option, index) => {
+                const button = document.createElement('button');
+                button.innerHTML = `<span class="font-bold mr-2">${String.fromCharCode(65 + index)}.</span> ${option}`;
+                button.classList.add('option-btn', 'w-full', 'text-left', 'p-4', 'border-2', 'border-gray-300', 'rounded-lg', 'hover:bg-cyan-50', 'hover:border-cyan-400');
+                button.dataset.index = index;
+                button.onclick = () => selectAnswer(index, button);
+                optionsContainer.appendChild(button);
+            });
+            
+            nextBtn.disabled = true;
+            if (currentQuestionIndex === quizData.length - 1) {
+                nextBtn.textContent = 'Finalizar';
+            } else {
+                nextBtn.textContent = 'Próxima';
+            }
+        }
+
+        function selectAnswer(index, button) {
+            const buttons = optionsContainer.querySelectorAll('.option-btn');
+            buttons.forEach(btn => btn.classList.remove('selected'));
+            button.classList.add('selected');
+            nextBtn.disabled = false;
+        }
+
+        function handleNextQuestion() {
+            const selectedOption = optionsContainer.querySelector('.selected');
+            if (!selectedOption) return;
+
+            const answerIndex = parseInt(selectedOption.dataset.index);
+            const currentQuestion = quizData[currentQuestionIndex];
+
+            // Armazena a resposta, mesmo que a pessoa avance sem selecionar (embora o botão esteja disabled)
+            userAnswers[currentQuestionIndex] = answerIndex;
+
+            if (answerIndex === currentQuestion.correct) {
+                score++;
+            }
+
+            currentQuestionIndex++;
+            loadQuestion();
+        }
+
+        function endQuiz() {
+            clearInterval(timer);
+            quizScreen.classList.add('hidden');
+            resultsScreen.classList.remove('hidden');
+            showResults();
+        }
+
+        function showResults() {
+            const incorrect = quizData.length - score;
+            const percentage = ((score / quizData.length) * 100).toFixed(1);
+            
+            // Exibe a saudação com o nome
+            userGreetingEl.textContent = `Parabéns, ${userName}!`; 
+
+            scoreText.textContent = `Você acertou ${score} de ${quizData.length} questões (${percentage}%)`;
+
+            const timeTaken = totalTime - timeRemaining;
+            const minutes = Math.floor(timeTaken / 60);
+            const seconds = timeTaken % 60;
+            timeText.textContent = `Tempo utilizado: ${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            
+            const ctx = document.getElementById('results-chart').getContext('2d');
+            if(window.resultsChart instanceof Chart) {
+                window.resultsChart.destroy();
+            }
+            window.resultsChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Corretas', 'Incorretas'],
+                    datasets: [{
+                        data: [score, incorrect],
+                        backgroundColor: ['#06b6d4', '#f59e0b'],
+                        borderColor: ['#ffffff'],
+                        borderWidth: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '70%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                font: { size: 14 }
+                            }
+                        }
+                    }
+                }
+            });
+
+            reviewBtn.disabled = incorrect === 0;
+        }
+
+        function showReview() {
+            resultsScreen.classList.add('hidden');
+            reviewScreen.classList.remove('hidden');
+            reviewContainer.innerHTML = '';
+            
+            quizData.forEach((question, index) => {
+                const userAnswer = userAnswers[index];
+                
+                // Filtra apenas as incorretas
+                if (userAnswer !== undefined && userAnswer !== question.correct) {
+                    const reviewBlock = document.createElement('div');
+                    reviewBlock.classList.add('border-b', 'border-gray-200', 'pb-6');
+                    
+                    const questionTitle = document.createElement('h3');
+                    questionTitle.textContent = `Questão ${index + 1}: ${question.question}`;
+                    questionTitle.classList.add('font-bold', 'text-lg', 'mb-4');
+                    
+                    const optionsList = document.createElement('div');
+                    optionsList.classList.add('space-y-2');
+                    question.options.forEach((option, optIndex) => {
+                        const optionP = document.createElement('p');
+                        optionP.textContent = `${String.fromCharCode(65 + optIndex)}. ${option}`;
+                        optionP.classList.add('p-3', 'rounded-md');
+
+                        if (optIndex === question.correct) {
+                            optionP.classList.add('correct');
+                        }
+                        if (optIndex === userAnswer) {
+                            optionP.classList.add('incorrect');
+                        }
+                        optionsList.appendChild(optionP);
+                    });
+
+                    const explanationBlock = document.createElement('div');
+                    explanationBlock.classList.add('mt-4', 'p-3', 'bg-amber-100', 'border-l-4', 'border-amber-500', 'text-amber-800', 'rounded-r-md');
+                    explanationBlock.innerHTML = `<p><span class="font-bold">Comentário:</span> ${question.explanation}</p>`;
+                    
+                    reviewBlock.appendChild(questionTitle);
+                    reviewBlock.appendChild(optionsList);
+                    reviewBlock.appendChild(explanationBlock);
+                    reviewContainer.appendChild(reviewBlock);
+                }
+            });
+        }
+        
+        startBtn.addEventListener('click', startQuiz);
+        nextBtn.addEventListener('click', handleNextQuestion);
+        retryBtn.addEventListener('click', startQuiz);
+        reviewBtn.addEventListener('click', showReview);
+        backToResultsBtn.addEventListener('click', () => {
+            reviewScreen.classList.add('hidden');
+            resultsScreen.classList.remove('hidden');
+        });
+        
+        // Novo listener para o botão de imprimir
+        printBtn.addEventListener('click', () => {
+            window.print();
+        });
+
+    </script>
+</body>
+</html>
