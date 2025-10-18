@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Chosen Palette: Calm Harmony -->
-    <!-- Application Structure Plan: The application follows a logical, multi-screen flow for an optimal user experience. 1) A 'Start Screen' introduces the quiz, collects the user's name, and provides a clear entry point. 2) The 'Quiz Screen' presents one question at a time to focus the user, featuring a progress indicator and a 40-minute timer. 3) The 'Results Screen' gives immediate feedback upon completion, displays the user's name, and offers a print option for permanent record. 4) A 'Review Screen' fulfills the crucial educational goal by allowing users to analyze their incorrect answers with detailed explanations. This structured, sequential approach guides the user from introduction to active learning and reflection, which is the most effective way to present a test-based application. -->
+    <!-- Application Structure Plan: The application follows a logical, multi-screen flow for an optimal user experience. 1) A 'Start Screen' introduces the quiz, collects the user's name, and provides a clear entry point. 2) The 'Quiz Screen' presents one question at a time to focus the user, featuring a progress indicator and a 60-minute timer. 3) The 'Results Screen' gives immediate feedback upon completion, displays the user's name, and offers a print option for permanent record. 4) A 'Review Screen' fulfills the crucial educational goal by allowing users to analyze their incorrect answers with detailed explanations. This structured, sequential approach guides the user from introduction to active learning and reflection, which is the most effective way to present a test-based application. -->
     <!-- Visualization & Content Choices: 
         - Report Info: 50 medical MCQs. Goal: Knowledge Assessment & Learning. Viz/Presentation Method: Sequential single-question view. Interaction: Click to select answer, button to advance. Justification: Prevents cognitive overload, mimics a real test environment.
         - Report Info: Final score. Goal: Performance Summary. Viz/Presentation Method: Donut Chart. Interaction: None (static view). Justification: Provides an immediate, intuitive visual breakdown of correct vs. incorrect answers. Library/Method: Chart.js.
@@ -71,7 +71,7 @@
         <!-- Start Screen -->
         <div id="start-screen" class="text-center bg-white p-8 rounded-xl shadow-lg">
             <h1 class="text-3xl md:text-4xl font-bold text-cyan-800 mb-4">Quiz de Otorrinolaringologia</h1>
-            <p class="text-gray-600 mb-6">Teste seus conhecimentos em 50 questões sobre anatomia, epistaxe e cirurgia nasossinusal. Você terá <span class="font-semibold text-cyan-600">40 minutos</span> para completar o quiz.</p>
+            <p class="text-gray-600 mb-6">Teste seus conhecimentos em 50 questões sobre anatomia, epistaxe e cirurgia nasossinusal. Você terá <span class="font-semibold text-cyan-600">60 minutos</span> para completar o quiz.</p>
             
             <!-- Campo para o Nome do Usuário -->
             <div class="mb-8">
@@ -735,7 +735,7 @@
         const nextBtn = document.getElementById('next-btn');
         const retryBtn = document.getElementById('retry-btn');
         const reviewBtn = document.getElementById('review-btn');
-        const printBtn = document.getElementById('print-btn'); // Novo botão
+        const printBtn = document.getElementById('print-btn'); 
         const backToResultsBtn = document.getElementById('back-to-results-btn');
 
         const questionCounter = document.getElementById('question-counter');
@@ -746,15 +746,15 @@
         const scoreText = document.getElementById('score-text');
         const timeText = document.getElementById('time-text');
         const reviewContainer = document.getElementById('review-container');
-        const userGreetingEl = document.getElementById('user-greeting'); // Novo elemento
+        const userGreetingEl = document.getElementById('user-greeting'); 
 
         let currentQuestionIndex = 0;
         let score = 0;
         let userAnswers = [];
         let timer;
-        const totalTime = 40 * 60; // Alterado para 40 minutos
+        const totalTime = 60 * 60; // Alterado para 60 minutos (3600 segundos)
         let timeRemaining = totalTime;
-        let userName = ''; // Variável para armazenar o nome
+        let userName = ''; 
 
         function startQuiz() {
             currentQuestionIndex = 0;
@@ -954,7 +954,7 @@
             resultsScreen.classList.remove('hidden');
         });
         
-        // Novo listener para o botão de imprimir
+        // Listener para o botão de imprimir
         printBtn.addEventListener('click', () => {
             window.print();
         });
